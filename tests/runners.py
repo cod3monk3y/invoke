@@ -1386,6 +1386,18 @@ Stderr: already printed
                 runner.run(_)
             runner.stop.assert_called_once_with()
 
+    class asynchronous:
+        def returns_AsyncResult_immediately_and_finishes_in_background(self):
+            r = Runner(Context)
+            # TODO: set proc completion bits to be falsey
+            result = r.run(_, asynchronous=True)
+            assert isinstance(AsyncResult, result)
+            # TODO: assert stop(), etc have not been called yet
+            # TODO: set proc completion to be truthy
+            # TODO: assert stop() etc now called
+
+        # NOTE: see AsyncResult tests below for its side
+
     class disown:
         @patch.object(threading.Thread, "start")
         def starts_and_returns_None_but_does_nothing_else(self, thread_start):
@@ -1666,3 +1678,22 @@ class Result_:
         def encodes_with_result_encoding(self, encode):
             Result(stdout="foo", encoding="utf-16").tail("stdout")
             encode.assert_called_once_with("\n\nfoo", "utf-16")
+
+
+class AsyncResult_:
+    def data_not_present_while_command_still_executing(self):
+        # TODO: or no? shouldn't it "fill up" as the program completes? or
+        # should that be exposed as a separate set of attributes perhaps?
+        skip()
+
+    def offers_join_or_wait_method_to_block_until_completion(self):
+        skip()
+
+    def context_manager_calls_join_or_wait_on_close_of_block(self):
+        skip()
+
+    def context_manager_yields_self(self):
+        skip()
+
+    # TODO: additional control to force stopping early? (eg triggers equivalent
+    # of send_interrupt()?)

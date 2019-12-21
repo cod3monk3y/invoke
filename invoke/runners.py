@@ -196,21 +196,24 @@ class Runner(object):
 
             - Connections to the controlling terminal are disabled, meaning you
               will not see the subprocess output and it will not respond to
-              your input - similar to ``hide=True`` and ``in_stream=False``
-              (though explicitly given ``(out|err|in)_stream`` file-like
-              objects will still be honored as normal).
+              your keyboard input - similar to ``hide=True`` and
+              ``in_stream=False`` (though explicitly given
+              ``(out|err|in)_stream`` file-like objects will still be honored
+              as normal).
             - `.run` returns immediately after starting the subprocess, and its
               return value becomes a `Result` sublass, `AsyncResult`, which
               behaves almost identically to its parent but whose
               ``.stdout``/``.stderr``/``.exited`` values are updated
               dynamically as the subprocess runs.
-            - `AsyncResult` also adds new methods such as `~AsyncResult.join`,
-              allowing similar semantics to APIs like threading.
+            - TODO: should it grow a .stdin that can be written to? What if
+              they supplied .*_stream?
+            - Asynchronous calls should be treated like threads and similar
+              APIs, in that they should always be closed to ensure clean
+              interpreter shutdown and discover any error conditions.
 
-                .. warning::
-                    Also like such APIs, these methods should be utilized to
-                    ensure a clean exit, or the background code reading from
-                    the subprocess' pipes may block interpreter shutdown.
+              This can be done either by treating the `AsyncResult` as a
+              context manager, or by explicitly calling its `~AsyncResult.join`
+              method. See the class' API docs for details.
 
             .. versionadded:: 1.4
 
@@ -357,6 +360,8 @@ class Runner(object):
         try:
             return self._run_body(command, **kwargs)
         finally:
+            # TODO: may need to change or move this in the real async case (and
+            # then also maybe rename this particular flag to _disowned)
             if not self._async:
                 self.stop()
                 self.stop_timer()
@@ -403,9 +408,9 @@ class Runner(object):
         self.start(command, self.opts["shell"], self.env)
         # If disowned, we just stop here - no threads, no timer, no error
         # checking, nada.
-        # TODO: or is that a lie? do we want a very stripped down eg
-        # DisownedResult that at least knows the PID? (Though that would not
-        # always apply to downstream.)
+        # TODO: it'd be nice to expose PID in retval, but that only applies for
+        # Local and not generically; should we make the retval be
+        # implementation-specific?
         if self.opts["disown"]:
             return
         # Stand up & kick off IO, timer threads
@@ -413,6 +418,12 @@ class Runner(object):
         self.threads, stdout, stderr = self.create_io_threads()
         for thread in self.threads.values():
             thread.start()
+        # TODO: if asynchronous=True, execute this in an
+        # ExceptionHandlingThread instead, placing a similar structure to our
+        # own finally()/etc into the join() method of AsyncResult?
+        return self._do_things()
+
+    def _do_things(self):
         # Wait for subprocess to run, forwarding signals as we get them.
         try:
             while True:
@@ -504,6 +515,8 @@ class Runner(object):
         # into a stream-names tuple.
         opts["hide"] = normalize_hide(opts["hide"])
         # Derive stream objects
+        # TODO: handle asynchronous=True re: updating/masking 'hide' based on
+        # *_stream
         out_stream = opts["out_stream"]
         if out_stream is None:
             out_stream = sys.stdout
@@ -1472,6 +1485,12 @@ class Result(object):
         # normalized
         text = "\n\n" + "\n".join(getattr(self, stream).splitlines()[-count:])
         return encode_output(text, self.encoding)
+
+
+class AsyncResult(Result):
+    """
+    """
+    pass
 
 
 def normalize_hide(val):
