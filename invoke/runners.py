@@ -814,6 +814,18 @@ class Runner(object):
             proc_finished = self.process_is_finished
             dead_threads = self.has_dead_threads
             if proc_finished or dead_threads:
+                # WORKAROUND FOR RACE CONDITION (Windows, at least)
+                # https://github.com/pyinvoke/invoke/issues/683
+                #
+                # If there are dead threads, continue to wait for the process to finish since it
+                # might just be a race condition between thread (stdout, stderr) termination and
+                # subprocess (POpen) completion.
+                if dead_threads and not proc_finished:
+                    t = 0.0
+                    while t < 3.0 and not self.process_is_finished:
+                        time.sleep(self.input_sleep)
+                        t += self.input_sleep
+                # END WORKAROUND
                 break
             time.sleep(self.input_sleep)
 
